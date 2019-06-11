@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js" charset="utf-8"></script>
+<script>
+   d3.layout.orbit = function() {
+       var currentTickStep = 0;
+       var orbitNodes;
+       var orbitSize = [1,1];
+       var nestedNodes;
+       var flattenedNodes = [];
+       var tickRadianStep = 0.004363323129985824;
+       var orbitDispatch = d3.dispatch('tick');
+       var tickInterval;
+       var orbitalRings = [];
+       var orbitDepthAdjust = function() {return 2.95};
+       var childrenAccessor = function(d) {return d.children};
+       var tickRadianFunction = function() {return 1};
+       var fixedOrbitArray = [99];
+       var orbitMode = "flat";
+       function _orbitLayout() {
+           return _orbitLayout;
+       }
+       _orbitLayout.mode = function(_mode) {
+           //Atomic, Solar, other?
+           if (!arguments.length) return orbitMode;
+           if (_mode == "solar") {
+               fixedOrbitArray = [1]
+           }
+           if (_mode == "atomic") {
+               fixedOrbitArray = [2,8,18,32,32,18,2]
+           }
+           if (_mode == "flat") {
+               fixedOrbitArray = [99]
+           }
+           orbitMode = _mode;
+           if (Array.isArray(_mode)) {
+               fixedOrbitArray = _mode;
+               orbitMode = "custom";
+           }
+           return this
+       }
+       _orbitLayout.start = function() {
+           //activate animation here
+           tickInterval = setInterval(
+                   function() {
+                       currentTickStep++;
+                       flattenedNodes.forEach(function(_node){
+                           if (_node.parent) {
+                               _node.x = _node.parent.x + ( (_node.ring) * Math.sin( _node.angle + (currentTickStep * tickRadianStep * tickRadianFunction(_node))) );
+                               _node.y = _node.parent.y + ( (_node.ring) * Math.cos( _node.angle + (currentTickStep * tickRadianStep * tickRadianFunction(_node))) );
+                           }
+                       })
+                       orbitalRings.forEach(function(_ring) {
+                           _ring.x = _ring.source.x;
+                           _ring.y = _ring.source.y;
+                       })
+                       orbitDispatch.tick();
+                   },
+                   10);
+       }
+       _orbitLayout.stop = function() {
+           //deactivate animation here
+           clearInterval(tickInterval);
+       }
+       _orbitLayout.speed = function(_degrees) {
+           if (!arguments.length) return tickRadianStep / (Math.PI / 360);
+           tickRadianStep = tickRadianStep = _degrees * (Math.PI / 360);
+           return this;
+       }
+       _orbitLayout.size = function(_value) {
+           if (!arguments.length) return orbitSize;
+           orbitSize = _value;
+           return this;
+           //change size here
+       }
+       _orbitLayout.revolution = function(_function) {
+           //change ring size reduction (make that into dynamic function)
+           if (!arguments.length) return tickRadianFunction;
+           tickRadianFunction = _function;
+           return this
+       }
+       _orbitLayout.orbitSize = function(_function) {
+           //change ring size reduction (make that into dynamic function)
+           if (!arguments.length) return orbitDepthAdjust;
+           orbitDepthAdjust = _function;
+           return this
+       }
+       _orbitLayout.orbitalRings = function() {
+           //return an array of data corresponding to orbital rings
+           if (!arguments.length) return orbitalRings;
+           return this;
+       }
+       _orbitLayout.nodes = function(_data) {
+           if (!arguments.length) return flattenedNodes;
+           nestedNodes = _data;
+           calculateNodes();
+           return this;
+       }
+       _orbitLayout.children = function(_function) {
+          // if (!arguments.length) return childrenAccessor;
+           //Probably should use d3.functor to turn a string into an object key
+           childrenAccessor = _function;
+           return this;
+       }
+       d3.rebind(_orbitLayout, orbitDispatch, "on");
+       return _orbitLayout;
+       function createChildren(totalChildren) {
+           var children=  new Array(totalChildren);
+           for (var i = 1; i<=totalChildren;i++) {
+               var child = [{'name': 'electron '+1}];
+               children[i-1]=child;
+           }
+           return children;
+       }
+       function calculateNodes() {
+           orbitalRings = [];
+           orbitNodes = nestedNodes;
+           orbitNodes.x = orbitSize[0] / 2;
+           orbitNodes.y = orbitSize[1] / 2;
+           orbitNodes.ring = orbitSize[0] / 2;
+           orbitNodes.depth = 0;
+           flattenedNodes.push(orbitNodes);
+           traverseNestedData(orbitNodes);
+           function traverseNestedData(_node) {
+               var totalChildren = _node.number;
+               _node['children']=createChildren(totalChildren);
+               if(childrenAccessor(_node)) {
+                   var y = 0;
+                 var totalChildren = _node.number;
+                  // var totalChildren = childrenAccessor(_node).length;
+                   var _rings = 0;
+                   var _total_positions = 0;
+                   var _p = 0;
+                   while (_total_positions < totalChildren) {
+                       if (fixedOrbitArray[_p]) {
+                           _total_positions += fixedOrbitArray[_p];
+                       }
+                       else {
+                           _total_positions += fixedOrbitArray[fixedOrbitArray.length - 1];
+                       }
+                       _p++;
+                       _rings++;
+                   }
+                   while (y < totalChildren) {
+                       var _pos = 0;
+                       var _currentRing = 0;
+                       var _p = 0;
+                       var _total_positions = 0;
+                       while (_total_positions <= y) {
+                           if (fixedOrbitArray[_p]) {
+                               _total_positions += fixedOrbitArray[_p];
+                           }
+                           else {
+                               _total_positions += fixedOrbitArray[fixedOrbitArray.length-1];
+                           }
+                           _p++;
+                           _currentRing++;
+                       }
+                       var ringSize = fixedOrbitArray[fixedOrbitArray.length-1];
+                       if (fixedOrbitArray[_currentRing-1]) {
+                           ringSize = fixedOrbitArray[_currentRing-1];
+                       }
+                       if (_node.parent) {
+                           var _ring = {source: _node, x: _node.x, y: _node.y, r: _node.parent.ring / orbitDepthAdjust(_node) * (_currentRing / _rings)};
+                       }
+                       else {
+                           var _ring = {source: _node, x: _node.x, y: _node.y, r: (orbitSize[0] / 2) * (_currentRing / _rings)};
+                       }
+                       var thisPie = d3.layout.pie().value(function(d) {return childrenAccessor(d) ? 4 : 1});
+                      var piedValues = thisPie(childrenAccessor(_node).filter(function(d,i) {return i >= y && i <= y+ringSize-1}));
+                       //var piedValues = thisPie(childrenAccessor(_node).filter(function(d,i) {return ringSize}));
+                       for (var x = y; x<y+ringSize && x<totalChildren;x++) {
+                           childrenAccessor(_node)[x].angle = ((piedValues[x - y].endAngle - piedValues[x - y].startAngle) / 2) + piedValues[x - y].startAngle;
+                           childrenAccessor(_node)[x].parent = _node;
+                           childrenAccessor(_node)[x].depth = _node.depth + 1;
+                           childrenAccessor(_node)[x].x = childrenAccessor(_node)[x].parent.x + ( (childrenAccessor(_node)[x].parent.ring / 2) * Math.sin( childrenAccessor(_node)[x].angle ) );
+                           childrenAccessor(_node)[x].y = childrenAccessor(_node)[x].parent.y + ( (childrenAccessor(_node)[x].parent.ring / 2) * Math.cos( childrenAccessor(_node)[x].angle ) );
+                           childrenAccessor(_node)[x].ring = _ring.r;
+                           flattenedNodes.push(childrenAccessor(_node)[x]);
+                           traverseNestedData(childrenAccessor(_node)[x]);
+                       }
+                       orbitalRings.push(_ring);
+                       y+=ringSize;
+                   }
+               }
+           }
+       }
+   }
+		function myFunction() { //klasa .imeklase tranzicija, boja +
+			//d3.selectAll(".non").transition().duration(1000).attr("transform", "translate(150)");
+;
+		}
+		
+		function start(){initialise(); myFunction();}
+</script>
+<body onload="start()">
+<div class="topnav">
+  <a class="Metals"  >Metals</a>
+  <a class="Nonmetals" >Nonmetals</a>
+  <a class="Semimetals">Semimetals</a>
+  <!-- <a class="About">About</a> -->
+</div>
+<div>
+<div class="title-container">
+  <h1> </h1>
+</div>
+<div class="title-container">
+<h2></h2>
+</div>
+    <div id="view-container" style="width:600px;height:320px;margin-left: 300px;    text-align:absolute;">
+        <h3> <div id="elementName"></div></h3>
+            <h3><div id="groupName"></div></h3>
+                    <h3> <div id="molar"></div></h3>
+    </div>
+    <div class="wrapper">
+        <ul class="main">
+            <!-- ROW 1 -->
+            <li id="element" data-pos="1" data-nb="1.0079"  class=" non">H<span></span></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li id="element" data-pos="2" data-nb="4.0026"   class="non">He<span></span></li>
+            <!-- ROW 2 -->
+            <li id="element" data-pos="3" data-nb="6.941"  class="met">Li<span></span></li>
+            <li id="element" data-pos="4" data-nb="9.0122"   class="met">Be<span></span></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li id="element" data-pos="5" data-nb="10.811"   class="semi">B<span></span></li>
+            <li id="element" data-pos="6" data-nb="12.011"  class="non">C<span></span></li>
+            <li id="element" data-pos="7" data-nb="14.007"  class="non">N<span></span></li>
+            <li id="element" data-pos="8" data-nb="15.999"   class="non">O<span></span></li>
+            <li id="element" data-pos="9" data-nb="18.998"   class="non">F<span></span></li>
+            <li id="element" data-pos="10" data-nb="20.180"   class="non">Ne<span></span></li>
+            <!-- ROW 3 -->
+            <li id="element" data-pos="11" data-nb="22.990"  class="met">Na<span></span></li>
+            <li id="element" data-pos="12" data-nb="24.305"  class="met">Mg<span></span></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li class="empty"></li>
+            <li id="element" data-pos="13" data-nb="26.982"  class="met">Al<span></span></li>
+            <li id="element" data-pos="14" data-nb="28.086"  class="semi">Si<span></span></li>
+            <li id="element" data-pos="15" data-nb="30.974" class="non">P<span></span></li>
+            <li id="element" data-pos="16" data-nb="32.065" class="non">S<span></span></li>
+            <li id="element" data-pos="17" data-nb="35.453" class="non">Cl<span></span></li>
+            <li id="element" data-pos="18" data-nb="39.948" class="non">Ar<span></span></li>
+            <!-- ROW 4 -->
+            <li id="element" data-pos="19" data-nb="39.098" class="met">K<span></span></li>
+            <li id="element" data-pos="20" data-nb="40.078" class="met">Ca<span></span></li>
+            <li id="element" data-pos="21" data-nb="44.956" class="met">Sc<span></span></li>
+            <li id="element" data-pos="22" data-nb="47.867" class="met">Ti<span></span></li>
+            <li id="element" data-pos="23" data-nb="50.942" class="met">V<span></span></li>
+            <li id="element" data-pos="24" data-nb="51.996" class="met">Cr<span></span></li>
+            <li id="element" data-pos="25" data-nb="54.938" class="met">Mn<span></span></li>
+            <li id="element" data-pos="26" data-nb="55.845" class="met">Fe<span></span></li>
+            <li id="element" data-pos="27" data-nb="58.933" class="met">Co<span></span></li>
+            <li id="element" data-pos="28" data-nb="58.693" class="met">Ni<span></span></li>
+            <li id="element" data-pos="29" data-nb="63.546" class="met">Cu<span></span></li>
+            <li id="element" data-pos="30" data-nb="65.39" class="met">Zn<span></span></li>
+            <li id="element" data-pos="31" data-nb="69.723" class="met">Ga<span></span></li>
+            <li id="element" data-pos="32" data-nb="72.64" class="semi">Ge<span></span></li>
+            <li id="element" data-pos="33" data-nb="74.922" class="semi">As<span></span></li>
+            <li id="element" data-pos="34" data-nb="78.96" class="non">Se<span></span></li>
+            <li id="element" data-pos="35" data-nb="79.904" class="non">Br<span></span></li>
+            <li id="element" data-pos="36" data-nb="83.80" class="non">Kr<span></span></li>
+            <!-- ROW 5 -->
+            <li id="element" data-pos="37" data-nb="85.468" class="met">Rb<span></span></li>
+            <li id="element" data-pos="38" data-nb="87.62" class="met">Sr<span></span></li>
+            <li id="element" data-pos="39" data-nb="88.906" class="met">Y<span></span></li>
+            <li id="element" data-pos="40" data-nb="91.224" class="met">Zr<span></span></li>
+            <li id="element" data-pos="41" data-nb="92.906" class="met">Nb<span></span></li>
+            <li id="element" data-pos="42" data-nb="95.94" class="met">Mo<span></span></li>
+            <li id="element" data-pos="43" data-nb="(96)" class="met">Tc<span></span></li>
+            <li id="element" data-pos="44" data-nb="101.07" class="met">Ru<span></span></li>
+            <li id="element" data-pos="45" data-nb="102.91" class="met">Rh<span></span></li>
+            <li id="element" data-pos="46" data-nb="106.42" class="met">Pd<span></span></li>
+            <li id="element" data-pos="47" data-nb="107.87" class="met">Ag<span></span></li>
+            <li id="element" data-pos="48" data-nb="112.41" class="met">Cd<span></span></li>
+            <li id="element" data-pos="49" data-nb="114.82" class="met">In<span></span></li>
+            <li id="element" data-pos="50" data-nb="118.71" class="met">Sn<span></span></li>
+            <li id="element" data-pos="51" data-nb="121.76" class="semi">Sb<span></span></li>
+            <li id="element" data-pos="52" data-nb="127.60" class="semi">Te<span></span></li>
+            <li id="element" data-pos="53" data-nb="126.90" class="non">I<span></span></li>
+            <li id="element" data-pos="54" data-nb="131.29" class="non">Xe<span></span></li>
+            <!-- ROW 6 -->
+            <li id="element" data-pos="55" data-nb="132.91" class="met">Cs<span></span></li>
+            <li id="element" data-pos="56" data-nb="137.33" class="met">Ba<span></span></li>
+            <li id="element" data-pos="57-71" class="type-8">La-Lu<span>Lanthanide</span></li>
+            <li id="element" data-pos="72" data-nb="178.49" class="met">Hf<span></span></li>
+            <li id="element" data-pos="73" data-nb="180.95" class="met">Ta<span></span></li>
+            <li id="element" data-pos="74" data-nb="183.64" class="met">W<span></span></li>
+            <li id="element" data-pos="75" data-nb="186.21" class="met">Re<span></span></li>
+            <li id="element" data-pos="76" data-nb="190.23" class="met">Os<span></span></li>
+            <li id="element" data-pos="77" data-nb="192.22" class="met">Ir<span></span></li>
+            <li id="element" data-pos="78" data-nb="195.08" class="met">Pt<span></span></li>
+            <li id="element" data-pos="79" data-nb="196.97" class="met">Au<span></span></li>
+            <li id="element" data-pos="80" data-nb="200.59" class="met">Hg<span></span></li>
+            <li id="element" data-pos="81" data-nb="204.38" class="met">Tl<span></span></li>
+            <li id="element" data-pos="82" data-nb="207.2" class="met">Pb<span></span></li>
+            <li id="element" data-pos="83" data-nb="208.96" class="met">Bi<span></span></li>
+            <li id="element" data-pos="84" data-nb="(209)" class="met">Po<span></span></li>
+            <li id="element" data-pos="85" data-nb="(210)" class="semi">At<span></span></li>
+            <li id="element" data-pos="86" data-nb="(222)" class="met">Rn<span></span></li>
+            <li id="element" data-pos="87" data-nb="(223)" class="met">Fr<span></span></li>
+            <li id="element" data-pos="88" data-nb="(226)" class="met">Ra<span></span></li>
+            <li id="element" data-pos="89-103" class="type-9">Ac-Lr<span>Actinide</span></li>
+            <li id="element" data-pos="104" data-nb="(261)" class="met">Rf<span></span></li>
+            <li id="element" data-pos="105" data-nb="(262)" class="met">Db<span></span></li>
+            <li id="element" data-pos="106" data-nb="(266)" class="met">Sg<span></span></li>
+            <li id="element" data-pos="107" data-nb="(264)" class="met">Bh<span></span></li>
+            <li id="element" data-pos="108" data-nb="(277)" class="met">Hs<span></span></li>
+            <li id="element" data-pos="109" data-nb="(268)" >Mt<span></span></li>
+            <li id="element" data-pos="110" data-nb="(281)" >Ds<span></span></li>
+            <li id="element" data-pos="111" data-nb="(272)" >Rg<span></span></li>
+            <li id="element" data-pos="112" data-nb="(285)" >Uub<span></span></li>
+            <li id="element" data-pos="113" data-nb="(285)" >Uut<span></span></li>
+            <li id="element" data-pos="114" data-nb="(289)" >Uuq<span></span></li>
+            <li id="element" data-pos="115" data-nb="(289)" >Uup<span></span></li>
+            </ul>
+        </div>
+</div>
+</body>
+<script> 
+	d3.select(".Metals").on("mouseover",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".met").transition().style("background-color", 'black');	
+	})
+	.on("mouseout",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".met").transition()
+		
+            .duration(100)
+			
+            .style("background-color", 'rgba(99, 219, 255, 0.2)');
+	});
+	d3.select(".Nonmetals").on("mouseover",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".non").transition().style("background-color", 'black');
+		
+	})
+	.on("mouseout",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".non").transition()
+		
+            .duration(100)
+			
+            .style("background-color", 'rgba(99, 219, 255, 0.2)');
+	});
+	d3.select(".Semimetals").on("mouseover",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".semi").transition().style("background-color", 'black');
+		
+	})
+	.on("mouseout",function(){
+	
+	console.log("Hello world!");
+	
+		d3.selectAll(".semi").transition()
+		
+            .duration(100)
+			
+            .style("background-color", 'rgba(99, 219, 255, 0.2)');
+	
+	});
+    var allOrbits=[];
+    function initialise()
+    {
+      $("ul.main li").click(function(e)
+        {
+            onElementClick($(this).attr('data-pos'));
+        });
+        onElementClick(1);
+    }
+    function drawReactants(data)
+    {
+        for(var i=0;i<data.length;i++) {
+            //down with category20a()!!
+            colors = d3.scale.category20b();
+            orbitScale = d3.scale.linear().domain([1, 3]).range([3.8, 1.5]).clamp(true);
+            radiusScale = d3.scale.linear().domain([0, 1, 2, 3]).range([20, 10, 3, 1]).clamp(true);
+            orbit = d3.layout.orbit().size([300, 300]).mode(data[i].electrons)
+                    .children(function (d) {
+                        return d.children
+                    })
+                    .revolution(function (d) {
+                        return d.depth
+                    })
+                    .orbitSize(5)
+                    .speed(.5)
+                    .nodes(data[i]);
+            d3.select("#reactant" + (i + 1)).select("svg").selectAll("circle.orbits")
+                    .data(orbit.orbitalRings())
+                    .enter()
+                    .insert("circle", "g")
+                    .attr("class", "ring")
+                    .attr("r", function (d) {
+                        return d.r
+                    })
+                    .attr("cx", function (d) {
+                        return d.x
+                    })
+                    .attr("cy", function (d) {
+                        return d.y
+                    })
+                    .style("fill", "none")
+                    .style("stroke", "#63dbff")
+                    .style("stroke-width", "1px")
+                    .style("stroke-opacity", 1)
+            orbit.on("tick", function () {
+                d3.selectAll("g.node")
+                        .attr("transform", function (d) {
+                            return "translate(" + d.x + "," + d.y + ")"
+                        });
+               
+            });
+            orbit.start();
+        }
+    }
+    function onElementClick(id) {
+        d3.json("Elements.json", function(data) {drawOrbit(data,id)});
+//sleep(1000);
+    }
+    function drawOrbit(_data,id) {
+        d3.select("#view-container").select("svg").remove();
+        $("#elementName").text("NAME: "+_data.table[id-1].name);
+        $("#groupName").text("GROUP NAME: "+_data.table[id-1].group);
+        $("#molar").text("MOLAR MASS: "+_data.table[id-1].molar);
+            //down with category20a()!!
+            colors = d3.scale.category20b();
+            orbitScale = d3.scale.linear().domain([1, 3]).range([3.8, 1.5]).clamp(true);
+            radiusScale = d3.scale.linear().domain([0, 1, 2, 3]).range([20, 10, 3, 1]).clamp(true);
+            orbit = d3.layout.orbit().size([300, 300]).mode(_data.table[id-1].electrons)
+                    .children(function (d) {
+                        return d.children
+                    })
+                    .revolution(function (d) {
+                        return d.depth
+                    })
+                    .orbitSize(5)
+                    .speed(.5)
+                    .nodes(_data.table[id-1]);
+            d3.select("#view-container").append("svg").selectAll("g.node").data(orbit.nodes())
+                    .enter()
+                    .append("g")
+                    .attr("class", "node")
+                    .attr("transform", function (d) {
+                        return "translate(" + d.x + "," + d.y + ")"
+                    })
+//                    .on("mouseover", nodeOver)
+//                    .on("mouseout", nodeOut)
+            d3.select("#view-container").selectAll("g.node")
+                    .append("circle")
+                    .attr("r", function (d) {
+                        return 5
+                    })
+                    .style("fill", function (d) {
+                        return '#63dbff';
+                    })
+            d3.select("#view-container").select("svg").selectAll("circle.orbits")
+                    .data(orbit.orbitalRings())
+                    .enter()
+                    .insert("circle", "g")
+                    .attr("class", "ring")
+                    .attr("r", function (d) {
+                        return d.r
+                    })
+                    .attr("cx", function (d) {
+                        return d.x
+                    })
+                    .attr("cy", function (d) {
+                        return d.y
+                    })
+                    .style("fill", "none")
+                    .style("stroke", "#63dbff")
+                    .style("stroke-width", "1px")
+                    .style("stroke-opacity", 1)
+            orbit.on("tick", function () {
+                d3.selectAll("g.node")
+                        .attr("transform", function (d) {
+                            return "translate(" + d.x + "," + d.y + ")"
+                        });
+                d3.selectAll("circle.ring")
+                        .attr("cx", function (d) {
+                            return d.x
+                        })
+                        .attr("cy", function (d) {
+                            return d.y
+                        });
+            });
+            orbit.start();
+          //  setTimeout(function(){orbit.stop();},500);
+            allOrbits.push(orbit);
+            function nodeOver(d) {
+                var id= d.parent.number;
+                allOrbits[id-1].start();
+                d3.select(this).append("text").text(d.name).style("text-anchor", "middle").attr("y", 35);
+                d3.select(this).select("circle").style("stroke", "black").style("stroke-width", 3);
+            }
+            function nodeOut(d) {
+                var id= d.parent.number;
+                allOrbits[id-1].stop();
+                d3.selectAll("text").remove();
+                d3.selectAll("g.node > circle").style("stroke", "none").style("stroke-width", 0);
+            }
+        }
+        function sleep(miliseconds) {
+            var currentTime = new Date().getTime();
+            while (currentTime + miliseconds >= new Date().getTime()) {
+            }
+    }
+	
+</script>
+<style>
+  #main-container  svg {
+        padding-top: 7px;
+      padding-left: 50px;
+        height: 630px;
+        width: 630px;
+    }
+    .reaction-symbol
+    {
+        text-align: center;
+    }
+    svg {
+        padding: 20px;
+        height: 350px;
+        width: 350px;
+         }
+    * { box-sizing: border-box; padding:0; margin:0; }
+    body {
+  background-image:linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("https://wallpapercave.com/wp/0VOo6y9.jpg");
+background-repeat: no-repeat;
+background-size: cover;
+	
+        color:#222;
+        padding: 20px;
+        font-family:"HelveticaNeue-Light","Helvetica Neue Light","Helvetica Neue",Helvetica,Arial,"Lucida Grande",sans-serif;
+   
+        color: rgba(99, 219, 255, 1);
+    }
+    .wrapper {
+        width: 1135px;
+        margin: -100px 100px;
+        position: relative;
+    }
+    .main:after {
+        clear:both;
+        content:"";
+        display:table;
+    }
+@keyframes circle {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(360deg); }
+}
+@keyframes inner-circle {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(-360deg); }
+}
+	@keyframes povecanje {
+		0% {
+			transform: scale(5,5);
+		}
+		100% {
+			transform: scale(1,1);
+		}
+	}
+    .main li { 
+		
+        width:60px;
+        padding-left: 10px;
+        padding-top: 20px;
+        height:70px;
+        border:2px solid #63dbff;
+        box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);
+        position:relative;
+		
+		background-color: rgba(99, 219, 255, 0.2);
+        font-size:18px;
+        float:left;
+        color:#63dbff;
+        /*padding:0 2px;*/
+        margin:1px;
+        cursor:pointer;
+        /*padding-top:20px;*/
+        overflow:hidden;
+        transition:all .2s ease-in;
+        text-shadow:0 1px 0 rgba(0,0,0,1);
+		
+		animation: povecanje 3s 0s, circle 3s 3s;
+		
+	
+    }
+    .main li span {
+        display:block;
+        line-height:1;
+        font-size:9px;
+        color:white;
+        padding-top:7px;
+    }
+    .main .empty {
+	
+		background-color: transparent;
+        border:none;
+        box-shadow:none;
+        cursor:default;
+    }
+    .deactivate {
+        opacity:0.5;
+        -webkit-filter:grayscale(70%);
+        filter:grayscale(70%);
+    }
+    .main li:before,
+    .main li:after {
+        content:attr(data-pos);
+        position:absolute;
+        top:3px;
+        left:3px;
+        color:white;
+        font-size:9px;
+        line-height:1;
+    }
+    .main li:after {
+        content:attr(data-nb);
+        left:auto;
+        right:3px;
+    }
+    .main li:hover {
+        z-index:500;
+		transform: scale(2, 2);
+        background-color: rgba(50, 50, 50, 0.9);
+        box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    .main li.empty:hover {
+        box-shadow:none;
+	//	width:60px;
+   // height:70px;
+        transform:none;
+        background-color: transparent;
+    }
+	
+	.topnav {
+	cursor:pointer;
+  overflow: hidden;
+  background-color: rgba(99, 219, 255, 0.2);
+}
+.topnav a {
+  float: left;
+  color: rgba(99, 219, 255, 1);
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  font-size: 17px;
+}
+.topnav a:hover {
+  background-color: rgba(99, 219, 255, 0.5);
+  color: white;
+}
+.topnav a.active {
+  background-color: #4CAF50;
+  color: white;
+}
+</style>
